@@ -1,99 +1,144 @@
 #include "monty.h"
 
-/**
- * main - Entry point of the program
- * @argc: Number of command-line arguments
- * @argv: Array of command-line arguments
- *
- * Return: 0 on success, 1 on failure
- */
 int main(int argc, char *argv[])
 {
-	stack_t *stack;
 
-	if (argc < 2)
-	{
-		fprintf(stderr, "USAGE: monty file\n");
-		return (EXIT_FAILURE);
-	}
+    FILE *file;
+    stack_t *stack;
+    char *opcode;
+    char line[256];
+    int i;
+    unsigned int line_number;
+    int value;
+    size_t len;
 
-	stack = NULL; /* Initialize the stack */
-	if (!processFile(argv[1], &stack))
-		return (EXIT_FAILURE);
+    /* Check the number of arguments */
+    if (argc != 2)
+    {
+        fprintf(stderr, "USAGE: monty file\n");
+        exit(EXIT_FAILURE);
+    }
 
-	return (EXIT_SUCCESS);
-}
+    /* Open the Monty bytecode file */
+    file = fopen(argv[1], "r");
+    if (file == NULL)
+    {
+        fprintf(stderr, "Error: Can't open file %s\n", argv[1]);
+        exit(EXIT_FAILURE);
+    }
 
-/**
- * processFile - Process the commands in the file
- * @filename: Name of the file to process
- * @stack: Double pointer to the stack
- *
- * Return: 1 on success, 0 on failure
- */
-int processFile(char *filename, stack_t **stack)
-{
-	FILE *filePtr;
-	char buffer[SIZE];
-	int lineNumber = 0;
+    /* Initialize the stack */
+    stack = NULL;
 
-	instruction_t instructions[] = {
-		{"push", push},
-		{"pall", pall},
-		{"pint", pint},
-		{NULL, NULL}
-	};
+    line_number = 0;
 
-	filePtr = fopen(filename, "r");
-	if (filePtr == NULL)
-	{
-		fprintf(stderr, "Error: Can't open file %s\n", filename);
-		return (0);
-	}
+    while (fgets(line, sizeof(line), file) != NULL)
+    {
+        line_number++;
 
-	while (fgets(buffer, sizeof(buffer), filePtr) != NULL)
-	{
-		lineNumber++;
-		printf("at line %d: %s", lineNumber, buffer);
+        opcode = strtok(line, " \t\n$");
+        if (opcode == NULL || opcode[0] == '#')
+        {
+            continue;
+        }
 
-		if (!executeCommand(buffer, lineNumber, stack, instructions))
-		{
-			fclose(filePtr);
-			return (0);
-		}
-	}
+        if (strcmp(opcode, "push") == 0)
+        {
+            char *value_str = strtok(NULL, " \t\n$");
 
-	fclose(filePtr);
-	return (1);
-}
+            if (value_str == NULL)
+            {
+                fprintf(stderr, "L%u: usage: push integer\n", line_number);
+                exit(EXIT_FAILURE);
+            }
 
-/**
- * executeCommand - Execute a single command from the buffer
- * @buffer: Buffer containing the command
- * @lineNumber: Current line number
- * @stack: Double pointer to the stack
- * @instructions: Array of valid instructions
- *
- * Return: 1 on success, 0 on failure
- */
-int executeCommand(char *buffer, int lineNumber, stack_t **stack, instruction_t *instructions)
-{
-	char *token;
-	int i;
+            len = strlen(value_str);
+            while (len > 0 && value_str[len - 1] == '$')
+            {
+                value_str[--len] = '\0';
+            }
 
-	token = strtok(buffer, " \t\n");
-	if (token == NULL)
-		return (1);
+            value = atoi(value_str);
 
-	for (i = 0; instructions[i].opcode != NULL; i++)
-	{
-		if (strcmp(token, instructions[i].opcode) == 0)
-		{
-			instructions[i].f(stack, lineNumber);
-			return (1);
-		}
-	}
+            for (i = 0; value_str[i] != '\0'; i++)
+            {
+                if (!isdigit((unsigned char)value_str[i]) && value_str[i] != '-')
+                {
+                    fprintf(stderr, "L%u: usage: push integer (got '%s')\n", line_number, value_str);
+                    exit(EXIT_FAILURE);
+                }
+            }
 
-	fprintf(stderr, "L%d: unknown instruction %s\n", lineNumber, token);
-	return (0);
+            push(&stack, value);
+        }
+        else if (strcmp(opcode, "pall") == 0)
+        {
+            pall(&stack);
+        }
+        else if (strcmp(opcode, "pint") == 0)
+        {
+            pint(&stack, line_number);
+        }
+        else if (strcmp(opcode, "pop") == 0)
+        {
+            pop(&stack, line_number);
+        }
+        else if (strcmp(opcode, "swap") == 0)
+        {
+            swap(&stack, line_number);
+        }
+        else if (strcmp(opcode, "add") == 0)
+        {
+            add(&stack, line_number);
+        }
+        else if (strcmp(opcode, "nop") == 0)
+        {
+            nop(&stack, line_number);
+        }
+        else if (strcmp(opcode, "sub") == 0)
+        {
+            sub(&stack, line_number);
+        }
+        else if (strcmp(opcode, "div_op") == 0)
+        {
+            div_op(&stack, line_number);
+        }
+        else if (strcmp(opcode, "mul") == 0)
+        {
+            mul(&stack, line_number);
+        }
+        else if (strcmp(opcode, "mod") == 0)
+        {
+            mod(&stack, line_number);
+        }
+        else if (strcmp(opcode, "pchar") == 0)
+        {
+            pchar(&stack, line_number);
+        }
+        else if (strcmp(opcode, "pstr") == 0)
+        {
+            pstr(&stack, line_number);
+        }
+        else if (strcmp(opcode, "rotl") == 0)
+        {
+            rotl(&stack, line_number);
+        }
+        else if (strcmp(opcode, "queue") == 0)
+        {
+              queue_op(&stack, line_number);
+        }
+        else if (strcmp(opcode, "stack") == 0)
+        {
+            stack_op(&stack, line_number);
+        }
+        else
+        {
+            fprintf(stderr, "L%u: unknown instruction %s\n", line_number, opcode);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    fclose(file);
+
+    return EXIT_SUCCESS;
 }
